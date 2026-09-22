@@ -1,6 +1,8 @@
 package models
 
 import (
+	"net/url"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -33,4 +35,9 @@ type LoneEmailPayload struct {
 
 type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password" validate:"required,min=8,max=30"`
+}
+
+type KafkaPayload struct {
+	Email string  `json:"email"`
+	Url   url.URL `json:"url"`
 }

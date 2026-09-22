@@ -8,15 +8,33 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func BuildPayload(email, link, token string) ([]byte, error) {
+	url, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	query := url.Query()
+	query.Set("token", token)
+	url.RawQuery = query.Encode()
+
+	p := models.KafkaPayload{
+		Email: email,
+		Url:   *url,
+	}
+	return json.Marshal(p)
+}
 
 func GetLogger(c *gin.Context) *slog.Logger {
 	if l, ok := c.Get("logger"); ok {
