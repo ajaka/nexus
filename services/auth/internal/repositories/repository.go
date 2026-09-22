@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,24 +24,6 @@ func InitRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{
 		pool: pool,
 	}
-}
-
-func (r *Repository) CreateUser(ctx context.Context, user *models.RegisterRequest) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	query := `
-	INSERT INTO users (full_name,email,password)
-	VALUES ($1, $2, $3)
-	`
-	_, err := r.pool.Exec(ctx, query, user.FullName, user.Email, user.Password)
-	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return errs.ERR_DUPLICATE_EMAIL
-		}
-		return err
-	}
-	return nil
 }
 
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
@@ -170,5 +153,65 @@ func (r *Repository) ResetPassword(ctx context.Context, email string, request *m
 		return err
 	}
 
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) CreateUser(ctx context.Context, user *models.RegisterRequest, payload []byte, event string) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var newUser models.User
+	query := `
+	INSERT INTO users (full_name,email,password)
+	VALUES ($1, $2, $3)
+	RETURNING id
+	`
+	err = tx.QueryRow(ctx, query, user.FullName, user.Email, user.Password).Scan(&newUser.Id)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return errs.ERR_DUPLICATE_EMAIL
+		}
+		return err
+	}
+	err = r.CreateNewOutboxEvent(tx, ctx, payload, event, newUser.Id)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) CreateNewOutboxEvent(tx pgx.Tx, ctx context.Context, payload []byte, event string, trig_by uuid.UUID) error {
+	query := `
+		INSERT INTO outbox (payload,event,triggered_by)
+		VALUES ($1,$2,$3)
+	`
+	_, err := tx.Exec(ctx, query, payload, event, trig_by)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *Repository) ActivateEmailRecovery(ctx context.Context, req *models.ForgotPasswordRequest, payload []byte, event string, id uuid.UUID) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	err = r.CreateNewOutboxEvent(tx, ctx, payload, event, id)
+	if err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }

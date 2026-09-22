@@ -16,7 +16,7 @@ func (c *Cache) AddToBlacklist(ctx context.Context, prefix, identifier string, e
 	defer cancel()
 
 	key := BLACKLISTKEY + ":" + prefix + ":" + identifier
-	err := c.db.Set(ctx, key, identifier, exp).Err()
+	err := c.db.SetNX(ctx, key, identifier, exp).Err()
 	if err != nil {
 		return false
 	}

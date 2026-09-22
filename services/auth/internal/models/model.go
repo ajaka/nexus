@@ -1,6 +1,8 @@
 package models
 
 import (
+	"net/url"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -8,7 +10,7 @@ import (
 type RegisterRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	FullName string `json:"full_name" validate:"required,min=2,max=100"`
-	Password string `json:"password" validate:"required,min=8"`
+	Password string `json:"password" validate:"required,min=8,max=30"`
 }
 
 type LoginRequest struct {
@@ -32,5 +34,10 @@ type LoneEmailPayload struct {
 }
 
 type ResetPasswordRequest struct {
-	NewPassword string `json:"new_password" validate:"required,min=8"`
+	NewPassword string `json:"new_password" validate:"required,min=8,max=30"`
+}
+
+type KafkaPayload struct {
+	Email string  `json:"email"`
+	Url   url.URL `json:"url"`
 }

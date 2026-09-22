@@ -16,7 +16,7 @@ import (
 	"github.com/gorilla/securecookie"
 )
 
-func HandleForgotPassword(repo *repositories.Repository) gin.HandlerFunc {
+func HandleForgotPassword(repo *repositories.Repository, env *configs.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := common.GetLogger(c)
 		value, exists := c.Get("forgotPasswordRequest")
@@ -33,21 +33,48 @@ func HandleForgotPassword(repo *repositories.Repository) gin.HandlerFunc {
 			return
 		}
 
-		_, err := repo.GetUserByEmail(c.Request.Context(), req.Email)
+		user, err := repo.GetUserByEmail(c.Request.Context(), req.Email)
 		if err != nil && !errors.Is(err, errs.ERR_EMAIL_NO_EXISTS) {
 			logger.Error("Failed to check email for password reset", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
 			return
 		}
+
 		if err == nil {
-			// TODO: Send the password reset URL to the email service through Kafka.
 			logger.Info("Password reset requested for existing user")
+
+			token, _, err := common.GenerateJWT(env.JWT_EMAIL_SECRET, env.JWT_EMAIL_DURATION, models.LoneEmailPayload{
+				Email: req.Email,
+			})
+			if err != nil {
+				logger.Error("Failed to generate token for password reset", "err", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
+				return
+			}
+
+			payload, err := common.BuildPayload(req.Email, env.RESET_PASSWORD_URL, token)
+			if err != nil {
+				logger.Error("Failed to build payload for password reset", "err", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
+				return
+			}
+
+			err = repo.ActivateEmailRecovery(c.Request.Context(), &req, payload, "user.forgotpassword", user.Id)
+			if err != nil {
+				logger.Error("Failed to activate account recovery", "err", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
+				return
+			}
+		}
+		if errors.Is(err, errs.ERR_EMAIL_NO_EXISTS) {
+			logger.Warn("Password reset requested for non-existent email", "email", req.Email)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "An email has been sent with instructions to reset your password.",
 		})
+
 	}
 }
 

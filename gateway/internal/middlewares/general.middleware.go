@@ -3,14 +3,20 @@ package middlewares
 import (
 	"gateway/internal/configs"
 	"log/slog"
-	"uuid"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func GenerateRequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		reqId := uuid.NewV7()
+		reqId, err := uuid.NewV7()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
+			c.Abort()
+			return
+		}
 		c.Request.Header.Set("X-REQUEST-ID", reqId.String())
 		c.Writer.Header().Set("X-REQUEST-ID", reqId.String())
 		c.Set("requestId", reqId.String())

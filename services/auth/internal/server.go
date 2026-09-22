@@ -22,6 +22,9 @@ func Listen() error {
 	repo := repositories.InitRepository(pool)
 	cache := cache.Initcache(ctx, env, logger)
 
+	// Initialize kafka outbox
+	configs.InitializeKafkaOutbox(ctx, repo, env, logger)
+
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.SetTrustedProxies(nil)

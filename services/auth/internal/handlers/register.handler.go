@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"auth/internal/common"
+	"auth/internal/configs"
 	"auth/internal/errs"
 	"auth/internal/models"
 	"auth/internal/repositories"
@@ -12,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func HandleRegister(repo *repositories.Repository) gin.HandlerFunc {
+func HandleRegister(repo *repositories.Repository, env *configs.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := common.GetLogger(c)
 		value, exists := c.Get("registerRequest")
@@ -38,8 +39,24 @@ func HandleRegister(repo *repositories.Repository) gin.HandlerFunc {
 
 		request.Password = hashedPassword
 
+		token, _, err := common.GenerateJWT(env.JWT_EMAIL_SECRET, env.JWT_EMAIL_DURATION, models.LoneEmailPayload{
+			Email: request.Email,
+		})
+		if err != nil {
+			logger.Error("Failed to generate email registration token", "err", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
+			return
+		}
+
+		p, err := common.BuildPayload(request.Email, env.FRONTEND_VERIFICATION_URL, token)
+		if err != nil {
+			logger.Error("Failed to build payload for registration request", "err", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
+			return
+		}
+
 		logger.Info("Creating user from registration request", "email", request.Email)
-		if err = repo.CreateUser(c.Request.Context(), &request); err != nil {
+		if err := repo.CreateUser(c.Request.Context(), &request, p, "user.register"); err != nil {
 			var message string
 			var code int
 			if errors.Is(err, errs.ERR_DUPLICATE_EMAIL) {
@@ -55,7 +72,6 @@ func HandleRegister(repo *repositories.Repository) gin.HandlerFunc {
 			return
 
 		}
-		// TODO: Generate the email verification JWT, build the verification URL, and publish it to Kafka.
 		logger.Info("Successfully registered user", "email", request.Email)
 		c.JSON(http.StatusCreated, gin.H{"success": true, "message": "Registration request accepted"})
 	}

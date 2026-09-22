@@ -8,15 +8,33 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func BuildPayload(email, link, token string) ([]byte, error) {
+	url, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	query := url.Query()
+	query.Set("token", token)
+	url.RawQuery = query.Encode()
+
+	p := models.KafkaPayload{
+		Email: email,
+		Url:   *url,
+	}
+	return json.Marshal(p)
+}
 
 func GetLogger(c *gin.Context) *slog.Logger {
 	if l, ok := c.Get("logger"); ok {
@@ -139,7 +157,9 @@ func HandleLoginActivity(c *gin.Context, payload models.MinimalUserStruct, env *
 }
 
 func TokenDigest(token string) string {
-	digest := sha256.Sum256([]byte(token))
+	h := sha256.New()
+	h.Write([]byte(token))
+	digest := h.Sum(nil)
 	return hex.EncodeToString(digest[:])
 }
 
@@ -150,11 +170,18 @@ func BlacklistToken(ctx context.Context, c *cache.Cache, token, prefix string, d
 	return nil
 }
 
+func ValidatePasswordLength(password string) bool {
+	if len([]byte(password)) > 50 {
+		return false
+	}
+	return true
+}
+
 func HandleLogoutActivity(c *gin.Context, cc *cache.Cache, env *configs.Env) error {
 	sessionToken, _ := c.Cookie("JWT_SECRET")
 	refreshToken, _ := c.Cookie("JWT_REFRESH_SECRET")
 
-	if sessionToken == "" && refreshToken == "" {
+	if sessionToken == "" || refreshToken == "" {
 		return errs.ERR_NO_TOKENS_PROVIDED
 	}
 
