@@ -35,6 +35,13 @@ func ValidateRegisterRequest() gin.HandlerFunc {
 			return
 		}
 
+		if !common.ValidatePasswordLength(request.Password) {
+			logger.Warn("Request provided password exceeding recommended length")
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "The password is too long"})
+			c.Abort()
+			return
+		}
+
 		logger.Info("Successfully validated registration request")
 		c.Set("registerRequest", request)
 		c.Next()
@@ -115,6 +122,13 @@ func ValidateResetPasswordRequest() gin.HandlerFunc {
 		if err := validate.Struct(request); err != nil {
 			logger.Warn("Request provided invalid password reset details", "error", err)
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request details"})
+			c.Abort()
+			return
+		}
+
+		if !common.ValidatePasswordLength(request.NewPassword) {
+			logger.Warn("Request provided password exceeding recommended length")
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "The password is too long"})
 			c.Abort()
 			return
 		}

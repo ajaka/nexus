@@ -170,6 +170,13 @@ func BlacklistToken(ctx context.Context, c *cache.Cache, token, prefix string, d
 	return nil
 }
 
+func ValidatePasswordLength(password string) bool {
+	if len([]byte(password)) > 50 {
+		return false
+	}
+	return true
+}
+
 func HandleLogoutActivity(c *gin.Context, cc *cache.Cache, env *configs.Env) error {
 	sessionToken, _ := c.Cookie("JWT_SECRET")
 	refreshToken, _ := c.Cookie("JWT_REFRESH_SECRET")

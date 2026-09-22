@@ -49,9 +49,14 @@ func HandleRegister(repo *repositories.Repository, env *configs.Env) gin.Handler
 		}
 
 		p, err := common.BuildPayload(request.Email, env.FRONTEND_VERIFICATION_URL, token)
+		if err != nil {
+			logger.Error("Failed to build payload for registration request", "err", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
+			return
+		}
 
 		logger.Info("Creating user from registration request", "email", request.Email)
-		if err = repo.CreateUser(c.Request.Context(), &request, p, "user.register"); err != nil {
+		if err := repo.CreateUser(c.Request.Context(), &request, p, "user.register"); err != nil {
 			var message string
 			var code int
 			if errors.Is(err, errs.ERR_DUPLICATE_EMAIL) {

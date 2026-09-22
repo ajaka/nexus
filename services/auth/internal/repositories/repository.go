@@ -170,9 +170,9 @@ func (r *Repository) CreateUser(ctx context.Context, user *models.RegisterReques
 	query := `
 	INSERT INTO users (full_name,email,password)
 	VALUES ($1, $2, $3)
-	RETURNING id,
+	RETURNING id
 	`
-	err = tx.QueryRow(ctx, query, user.FullName, user.Email, user.Password).Scan(&newUser)
+	err = tx.QueryRow(ctx, query, user.FullName, user.Email, user.Password).Scan(&newUser.Id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {

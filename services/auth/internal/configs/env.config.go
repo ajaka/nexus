@@ -24,6 +24,8 @@ type Env struct {
 	JWT_EMAIL_DURATION        float64 `validate:"required,gt=0"`
 	COOKIE_SECRET             string  `validate:"required"`
 	FRONTEND_VERIFICATION_URL string  `validate:"required"`
+	KAFKA_TOPIC               string  `validate:"required"`
+	KAFKA_BROKER              string  `validate:"required"`
 	PRODUCTION                bool
 }
 
@@ -42,6 +44,8 @@ func LoadEnv(logger *slog.Logger) *Env {
 		COOKIE_SECRET:             os.Getenv("COOKIE_SECRET"),
 		RESET_PASSWORD_URL:        os.Getenv("RESET_PASSWORD_URL"),
 		FRONTEND_VERIFICATION_URL: os.Getenv("VERIFICATION_URL"),
+		KAFKA_TOPIC:               os.Getenv("KAFKA_TOPIC"),
+		KAFKA_BROKER:              os.Getenv("KAFKA_BROKER"),
 	}
 
 	env.PRODUCTION = env.ENVIRONMENT == "production"
