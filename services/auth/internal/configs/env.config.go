@@ -30,7 +30,10 @@ type Env struct {
 }
 
 func LoadEnv(logger *slog.Logger) *Env {
-	godotenv.Load()
+	err := godotenv.Load()
+	if err != nil {
+		logger.Error("Something went wrong while loading env vars, proceeding with systems env vars", "error", err)
+	}
 
 	env := Env{
 		DATABASE_URL:              os.Getenv("DATABASE_URL"),
@@ -43,14 +46,13 @@ func LoadEnv(logger *slog.Logger) *Env {
 		JWT_EMAIL_SECRET:          os.Getenv("JWT_EMAIL_SECRET"),
 		COOKIE_SECRET:             os.Getenv("COOKIE_SECRET"),
 		RESET_PASSWORD_URL:        os.Getenv("RESET_PASSWORD_URL"),
-		FRONTEND_VERIFICATION_URL: os.Getenv("VERIFICATION_URL"),
+		FRONTEND_VERIFICATION_URL: os.Getenv("FRONTEND_VERIFICATION_URL"),
 		KAFKA_TOPIC:               os.Getenv("KAFKA_TOPIC"),
 		KAFKA_BROKER:              os.Getenv("KAFKA_BROKER"),
 	}
 
 	env.PRODUCTION = env.ENVIRONMENT == "production"
 
-	var err error
 	env.JWT_SESSION_DURATION, err = strconv.ParseFloat(os.Getenv("JWT_SESSION_DURATION"), 64)
 	if err != nil {
 		logger.Error("Invalid JWT session duration", "error", err)
