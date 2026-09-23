@@ -1,8 +1,6 @@
 package main
 
-import (
-	"auth/internal"
-)
+import "users/internal"
 
 func main() {
 	if err := internal.Listen(); err != nil {

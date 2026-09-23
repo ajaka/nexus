@@ -215,3 +215,23 @@ func (r *Repository) ActivateEmailRecovery(ctx context.Context, req *models.Forg
 	}
 	return tx.Commit(ctx)
 }
+
+func (r *Repository) CheckIfUserExists(ctx context.Context, userId uuid.UUID, email string) error {
+	var user models.User
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	query := `
+	SELECT FROM users
+	WHERE id = $1 AND email = $2 AND verified = true
+	`
+
+	err := r.pool.QueryRow(ctx, query, userId, email).Scan(&user)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errs.ERR_EMAIL_NO_EXISTS
+		}
+		return err
+	}
+	return nil
+}

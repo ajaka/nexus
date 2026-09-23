@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "auth/gen/auth/v1;authv1";
+
+
+message VerifyUserExistsResponse{
+    bool exists=1;
+}
+
+message VerifyUserExistsRequest{
+    string id=1;
+    string email =2;
+}
+
+service AuthService {
+  rpc VerifyUserExists(VerifyUserExistsRequest) returns (VerifyUserExistsResponse);
+}
