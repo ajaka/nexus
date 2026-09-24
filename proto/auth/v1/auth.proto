@@ -14,6 +14,22 @@ message VerifyUserExistsRequest{
     string email =2;
 }
 
+message AuthenticateUserRequest{
+    string sessionID=1;
+}
+
+message MinimalUserStruct{
+    string userId = 1;
+    string email = 2;
+}
+
+message AuthenticateUserResponse{
+    bool allow =1;
+    MinimalUserStruct user=2;
+}
+
+
 service AuthService {
   rpc VerifyUserExists(VerifyUserExistsRequest) returns (VerifyUserExistsResponse);
+  rpc AuthenticateUser(AuthenticateUserRequest) returns (AuthenticateUserResponse);
 }

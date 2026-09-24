@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	BLACKLISTKEY string = "BLACKLIST"
+	BLACKLISTKEY       string = "BLACKLIST"
+	REDISSESSIONPREFIX string = "AUTH-SERVICE:SessionID"
 )
 
 func (c *Cache) AddToBlacklist(ctx context.Context, prefix, identifier string, exp time.Duration) bool {

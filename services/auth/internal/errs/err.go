@@ -14,4 +14,5 @@ var (
 	ERR_PASSWORD_RESET_COOLDOWN = errors.New("Password reset is not available yet")
 	ERR_INCOMPLETE_ARGS         = errors.New("Email and Id must be available")
 	ERR_INVALID_ID_PROVIDED     = errors.New("Id must be of type uuid converted to string")
+	ERR_SESSION_NOT_FOUND       = errors.New("Session ID could not be found in context")
 )

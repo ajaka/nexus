@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"time"
+	"uuid"
 
+	fts "github.com/fatih/structs"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -31,4 +33,15 @@ func Initcache(ctx context.Context, env *configs.Env, logger *slog.Logger) *Cach
 	return &Cache{
 		rdb,
 	}
+}
+func structToInterface(s any) map[string]any {
+	t := fts.New(s)
+	t.TagName = "redis"
+	m := t.Map()
+	for k, v := range m {
+		if u, ok := v.(uuid.UUID); ok {
+			m[k] = u.String()
+		}
+	}
+	return m
 }
