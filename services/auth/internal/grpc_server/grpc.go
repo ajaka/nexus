@@ -2,6 +2,7 @@ package grpc_server
 
 import (
 	authv1 "auth/gen/auth/v1"
+	"auth/internal/cache"
 	"auth/internal/errs"
 	"auth/internal/repositories"
 	"context"
@@ -15,11 +16,13 @@ import (
 type AuthServer struct {
 	authv1.UnimplementedAuthServiceServer
 	repo *repositories.Repository
+	c    *cache.Cache
 }
 
-func BuildAuthGrpcServer(repo *repositories.Repository) *AuthServer {
+func BuildAuthGrpcServer(repo *repositories.Repository, c *cache.Cache) *AuthServer {
 	return &AuthServer{
 		repo: repo,
+		c:    c,
 	}
 }
 
@@ -43,5 +46,21 @@ func (a *AuthServer) VerifyUserExists(ctx context.Context, req *authv1.VerifyUse
 
 	return &authv1.VerifyUserExistsResponse{
 		Exists: true,
+	}, nil
+}
+
+func (a *AuthServer) AutheticateUser(ctx context.Context, req *authv1.AuthenticateUserRequest) (*authv1.AuthenticateUserResponse, error) {
+	sessionId := req.SessionID
+	if sessionId == "" {
+		return nil, status.Error(codes.InvalidArgument, "SessionId can not be empty")
+	}
+	user, allowed := a.c.GetUser(ctx, sessionId)
+
+	return &authv1.AuthenticateUserResponse{
+		Allow: allowed,
+		User: &authv1.MinimalUserStruct{
+			UserId: user.UserId.String(),
+			Email:  user.Email,
+		},
 	}, nil
 }

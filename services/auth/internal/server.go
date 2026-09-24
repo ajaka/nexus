@@ -31,7 +31,7 @@ func Listen() error {
 	repo := repositories.InitRepository(pool)
 	cache := cache.Initcache(ctx, env, logger)
 
-	authServer := grpc_server.BuildAuthGrpcServer(repo)
+	authServer := grpc_server.BuildAuthGrpcServer(repo, cache)
 
 	// Initialize kafka outbox
 	// configs.InitializeKafkaOutbox(ctx, repo, env, logger)

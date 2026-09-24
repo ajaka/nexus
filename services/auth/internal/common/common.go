@@ -13,10 +13,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -76,8 +78,6 @@ func GenerateJWT(secret string, duration float64, payload jwt.Claims) (string, t
 	tokenDuration := HoursToDuration(duration)
 	expiresAt := jwt.NewNumericDate(time.Now().Add(tokenDuration))
 	switch claims := payload.(type) {
-	case *models.MinimalUserStruct:
-		claims.ExpiresAt = expiresAt
 	case *models.LoneEmailPayload:
 		claims.ExpiresAt = expiresAt
 	default:
@@ -127,32 +127,19 @@ func SetCookie(c *gin.Context, name, value string, maxAge int, secure bool) {
 	c.SetCookie(name, value, maxAge, "/", "", secure, true)
 }
 
-func HandleLoginActivity(c *gin.Context, payload models.MinimalUserStruct, env *configs.Env) error {
-	sessionToken, sessionDuration, err := GenerateJWT(env.JWT_SHARED_SECRET_KEY, env.JWT_SESSION_DURATION, &payload)
+func GenerateCleanUUID() string {
+	id := uuid.New().String()
+	return strings.ReplaceAll(id, "-", "")
+}
+
+func HandleLoginActivity(c *gin.Context, payload models.MinimalUserStruct, ca *cache.Cache, production bool) error {
+	id := GenerateCleanUUID()
+	exp, err := ca.SetUserOnline(c.Request.Context(), id, &payload)
 	if err != nil {
 		return err
 	}
-
-	refreshToken, refreshDuration, err := GenerateJWT(env.JWT_REFRESH_KEY, env.JWT_REFRESH_KEY_DURATION, &payload)
-	if err != nil {
-		return err
-	}
-
-	c.SetSameSite(http.SameSiteLaxMode)
-	SetCookie(
-		c,
-		"JWT_SECRET",
-		sessionToken,
-		int(sessionDuration/time.Second),
-		env.PRODUCTION,
-	)
-	SetCookie(
-		c,
-		"JWT_REFRESH_SECRET",
-		refreshToken,
-		int(refreshDuration/time.Second),
-		env.PRODUCTION,
-	)
+	expInInt := int(time.Until(exp).Seconds())
+	SetCookie(c, "sessionId", id, expInInt, production)
 	return nil
 }
 
@@ -178,30 +165,16 @@ func ValidatePasswordLength(password string) bool {
 }
 
 func HandleLogoutActivity(c *gin.Context, cc *cache.Cache, env *configs.Env) error {
-	sessionToken, _ := c.Cookie("JWT_SECRET")
-	refreshToken, _ := c.Cookie("JWT_REFRESH_SECRET")
-
-	if sessionToken == "" || refreshToken == "" {
-		return errs.ERR_NO_TOKENS_PROVIDED
+	val, ok := c.Get("sessionId")
+	if !ok {
+		return errs.ERR_SESSION_NOT_FOUND
 	}
-
-	var sessionClaims models.MinimalUserStruct
-	if err := VerifyJWT(c.Request.Context(), cc, sessionToken, "session", env.JWT_SHARED_SECRET_KEY, &sessionClaims); err != nil {
+	id, _ := val.(string)
+	err := cc.SetUserOffline(c.Request.Context(), id)
+	if err != nil {
 		return err
 	}
-	if err := BlacklistToken(c.Request.Context(), cc, sessionToken, "session", time.Until(sessionClaims.ExpiresAt.Time)); err != nil {
-		return err
-	}
-	var refreshClaims models.MinimalUserStruct
-	if err := VerifyJWT(c.Request.Context(), cc, refreshToken, "refresh", env.JWT_REFRESH_KEY, &refreshClaims); err != nil {
-		return err
-	}
-	if err := BlacklistToken(c.Request.Context(), cc, refreshToken, "refresh", time.Until(refreshClaims.ExpiresAt.Time)); err != nil {
-		return err
-	}
-
 	c.SetSameSite(http.SameSiteLaxMode)
-	SetCookie(c, "JWT_SECRET", "", -1, env.PRODUCTION)
-	SetCookie(c, "JWT_REFRESH_SECRET", "", -1, env.PRODUCTION)
+	SetCookie(c, "sessionId", "", -1, env.PRODUCTION)
 	return nil
 }

@@ -2,14 +2,11 @@ package domain
 
 import (
 	"github.com/google/uuid"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 type MinimalUserStruct struct {
 	UserId uuid.UUID `json:"id"`
 	Email  string    `json:"email"`
-	jwt.RegisteredClaims
 }
 
 type LimiterResponse struct {

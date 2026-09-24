@@ -1,90 +1,72 @@
 package middlewares
 
 import (
+	authv1 "gateway/gen/auth/v1"
 	"gateway/internal/cache"
 	"gateway/internal/common"
 	"gateway/internal/configs"
 	"gateway/internal/domain"
+	grpc_client "gateway/internal/grpc"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
-func AuthenticatePrivateRoutes(env *configs.Env, r *cache.Redis) gin.HandlerFunc {
+func AuthenticatePrivateRoutes(env *configs.Env, r *cache.Redis, gClient grpc_client.GrpcClient) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
-		var user domain.MinimalUserStruct
-		var err error
 		logger := common.GetLogger(c)
-		now := time.Now()
 		if checkIfPathIsAllowed(c.Request.URL.Path) {
 			c.Next()
 			return
 		}
-		secret, found := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
-
-		if secret == "" || !found {
-			secret, err = c.Cookie(domain.USER_JWT_COOKIE_KEY)
-			if err != nil || secret == "" {
-				logger.Warn("Request missing authentication token")
-				c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Unauthorized"})
-				c.Abort()
-				return
-			}
-		}
-
-		blacklisted, err := r.CheckBlackList(c.Request.Context(), "session", common.TokenDigest(secret))
+		id, err := c.Cookie("sessionId")
 		if err != nil {
-			logger.Error("Failed to check JWT blacklist", "error", err)
+			logger.Warn("Request sessionId is either missing or invalid")
+			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Unauthorized"})
+			c.Abort()
+			return
+		}
+		authResponse, err := gClient.Client.AuthenticateUser(c.Request.Context(), &authv1.AuthenticateUserRequest{
+			SessionID: id,
+		})
+		if err != nil {
+			logger.Error("Could not verify user authentication", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
 			c.Abort()
 			return
 		}
-		if blacklisted {
-			logger.Warn("Request provided a blacklisted JWT")
+		if !authResponse.Allow {
+			logger.Warn("Request participant is not authorized")
 			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Unauthorized"})
 			c.Abort()
 			return
 		}
-
-		token, err := jwt.ParseWithClaims(secret, &user, func(token *jwt.Token) (any, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, domain.ErrInvalidMethod
-			}
-			return env.JWT_SHARED_SECRET_KEY, nil
-		})
-
-		if err != nil || !token.Valid {
-			logger.Warn("Request provided invalid JWT", "error", err)
-			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Unauthorized"})
+		userId, err := uuid.Parse(authResponse.User.UserId)
+		if err != nil {
+			logger.Error("Could not standardize returned id back to uuid", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
 			c.Abort()
 			return
 		}
-
-		if user.ExpiresAt == nil || user.ExpiresAt.Time.Before(now) {
-			logger.Warn("Request provided expired JWT")
-			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Unauthorized"})
-			c.Abort()
-			return
+		user := domain.MinimalUserStruct{
+			UserId: userId,
+			Email:  authResponse.User.Email,
 		}
-
 		logger.Info("Successfully authenticated the request")
-		c.Set("user", user)
+		stringifiedUser, err := common.Stringify(user)
+
+		c.Request.Header.Set("X-REQUEST-IDENTITY", stringifiedUser)
+		c.Set("user", &user)
 		c.Next()
 	}
 }
 
 func checkIfPathIsAllowed(path string) bool {
 	allowedPaths := []string{
-		"/api/auth/login",
-		"/api/auth/register",
-		"/api/auth/refresh",
-		"/api/auth/password/reset",
-		"/api/auth/password/forgot",
-		"/api/auth/verify",
+		"/api/auth",
 	}
 
 	for _, allowedPath := range allowedPaths {

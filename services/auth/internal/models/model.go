@@ -21,7 +21,6 @@ type LoginRequest struct {
 type MinimalUserStruct struct {
 	UserId uuid.UUID `json:"id"`
 	Email  string    `json:"email"`
-	jwt.RegisteredClaims
 }
 
 type ForgotPasswordRequest struct {

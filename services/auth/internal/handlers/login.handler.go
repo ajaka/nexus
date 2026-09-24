@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"auth/internal/cache"
 	"auth/internal/common"
 	"auth/internal/configs"
 	"auth/internal/errs"
@@ -13,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func HandleLogin(repo *repositories.Repository, env *configs.Env) gin.HandlerFunc {
+func HandleLogin(repo *repositories.Repository, ca *cache.Cache, env *configs.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := common.GetLogger(c)
 		value, exists := c.Get("loginRequest")
@@ -67,7 +68,8 @@ func HandleLogin(repo *repositories.Repository, env *configs.Env) gin.HandlerFun
 		if err := common.HandleLoginActivity(
 			c,
 			payload,
-			env,
+			ca,
+			env.PRODUCTION,
 		); err != nil {
 			logger.Error("Failed to create login session", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
