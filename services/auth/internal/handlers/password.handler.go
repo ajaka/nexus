@@ -8,7 +8,6 @@ import (
 	"auth/internal/models"
 	"auth/internal/repositories"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -19,16 +18,9 @@ import (
 func HandleForgotPassword(repo *repositories.Repository, env *configs.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := common.GetLogger(c)
-		value, exists := c.Get("forgotPasswordRequest")
+		req, exists := common.GetFromContext[models.ForgotPasswordRequest](c, "forgotPasswordRequest")
 		if !exists {
 			logger.Error("Forgot password request was not found in context")
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
-			return
-		}
-
-		req, ok := value.(models.ForgotPasswordRequest)
-		if !ok {
-			logger.Error("Forgot password request has an invalid context type", "type", fmt.Sprintf("%T", value))
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
 			return
 		}
@@ -120,16 +112,9 @@ func HandleVerifyPasswordReset(env *configs.Env, cc *cache.Cache) gin.HandlerFun
 func HandleResetPassword(repo *repositories.Repository, env *configs.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := common.GetLogger(c)
-		value, exists := c.Get("resetPasswordRequest")
+		request, exists := common.GetFromContext[models.ResetPasswordRequest](c, "resetPasswordRequest")
 		if !exists {
 			logger.Error("Reset password request was not found in context")
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
-			return
-		}
-
-		request, ok := value.(models.ResetPasswordRequest)
-		if !ok {
-			logger.Error("Reset password request has an invalid context type", "type", fmt.Sprintf("%T", value))
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
 			return
 		}

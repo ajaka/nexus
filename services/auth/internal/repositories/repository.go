@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -218,6 +219,7 @@ func (r *Repository) ActivateEmailRecovery(ctx context.Context, req *models.Forg
 
 func (r *Repository) CheckIfUserExists(ctx context.Context, userId uuid.UUID, email string) error {
 	var user models.User
+
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -234,4 +236,65 @@ func (r *Repository) CheckIfUserExists(ctx context.Context, userId uuid.UUID, em
 		return err
 	}
 	return nil
+}
+
+func (r *Repository) SetUserOnline(ctx context.Context, session *models.Sessions) ([]string, error) {
+	var rotatedToken pgtype.Text
+	var evictedToken pgtype.Text
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	query := `WITH
+  purged AS (
+    DELETE FROM sessions
+    WHERE user_id = $1 AND expires_at < CURRENT_TIMESTAMP
+    RETURNING id
+  ),
+  rotated AS (
+    DELETE FROM sessions
+    WHERE user_id = $1 AND os = $2 AND browser = $3
+    RETURNING session_id AS old_token
+  ),
+  remaining AS (
+    SELECT id, session_id
+    FROM sessions
+    WHERE user_id = $1
+    ORDER BY expires_at ASC
+  ),
+
+  evicted AS (
+    DELETE FROM sessions
+    WHERE id IN (
+      SELECT id FROM remaining
+      WHERE (SELECT COUNT(*) FROM remaining) >= 5
+      LIMIT 1
+    )
+    RETURNING session_id AS evicted_token
+  )
+
+	INSERT INTO user_sessions (user_id, session_id, os, browser, expires_at)
+	VALUES ($1, $4, $2, $3, $5)
+	RETURNING
+  (SELECT old_token FROM rotated LIMIT 1) AS rotated_token,
+  (SELECT evicted_token FROM evicted LIMIT 1) AS evicted_token;
+`
+
+	err = tx.QueryRow(ctx, query, session.UserId, session.Os, session.Browser, session.SessionId, session.ExpiresAt).Scan(&rotatedToken, &evictedToken)
+	var result []string
+	if rotatedToken.Valid && rotatedToken.String != "" {
+		result = append(result, rotatedToken.String)
+	}
+	if evictedToken.Valid && evictedToken.String != "" {
+		result = append(result, evictedToken.String)
+	}
+	err = tx.Commit(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
