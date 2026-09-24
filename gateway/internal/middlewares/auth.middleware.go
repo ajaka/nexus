@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ajaka/nexus-shared/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -56,7 +57,7 @@ func AuthenticatePrivateRoutes(env *configs.Env, r *cache.Redis, gClient grpc_cl
 			Email:  authResponse.User.Email,
 		}
 		logger.Info("Successfully authenticated the request")
-		stringifiedUser, err := common.Stringify(user)
+		stringifiedUser, err := utils.Stringify(user)
 
 		c.Request.Header.Set("X-REQUEST-IDENTITY", stringifiedUser)
 		c.Set("user", &user)

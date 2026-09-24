@@ -1,5 +1,7 @@
 github.com/JGLTechnologies/gin-rate-limit v1.5.9 h1:EXbE5sSHG/4oaWSrhFgm5ebFzIAdBwaeIgwia8esUvo=
 github.com/JGLTechnologies/gin-rate-limit v1.5.9/go.mod h1:t9eLOUxikPI0TzKy0VYRbZJr7hBP2Qg9E3JigoxF70g=
+github.com/ajaka/nexus-shared v0.0.0-20260924112427-88d634a7d963 h1:S9oGUUXVtDQAJ6wRppiDWV4jCTKsNo+HeO0BXoVoZCE=
+github.com/ajaka/nexus-shared v0.0.0-20260924112427-88d634a7d963/go.mod h1:UjG/0top52gqL27RJVnxh9ZJJyoNFhgiLx/bJcHU2Tc=
 github.com/bytedance/gopkg v0.1.3 h1:TPBSwH8RsouGCBcMBktLt1AymVo2TVsBVCY4b6TnZ/M=
 github.com/bytedance/gopkg v0.1.3/go.mod h1:576VvJ+eJgyCzdjS+c4+77QF3p7ubbtiKARP3TxducM=
 github.com/bytedance/sonic v1.15.0 h1:/PXeWFaR5ElNcVE84U0dOHjiMHQOwNIx3K4ymzh/uSE=

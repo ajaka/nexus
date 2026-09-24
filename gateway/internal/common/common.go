@@ -2,9 +2,7 @@ package common
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"gateway/internal/configs"
 	"gateway/internal/domain"
 	"log/slog"
@@ -15,29 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-func Stringify(data any) (string, error) {
-
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return "", err
-	}
-	encodedData := base64.StdEncoding.EncodeToString(jsonData)
-	return encodedData, nil
-}
-
-func Reverse[T any](data string) (*T, error) {
-	jsonData, err := base64.StdEncoding.DecodeString(data)
-	if err != nil {
-		return nil, err
-	}
-	var result T
-	err = json.Unmarshal(jsonData, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
 
 func GetLogger(c *gin.Context) *slog.Logger {
 	if l, ok := c.Get("logger"); ok {
