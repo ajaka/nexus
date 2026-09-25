@@ -21,7 +21,9 @@ func (c *Cache) SetUserOnline(ctx context.Context, sessionId string, u *models.M
 
 	pipe.HSet(ctx, newKey, m)
 	pipe.Expire(ctx, newKey, exp)
-	pipe.Del(ctx, keys...)
+	if len(exps) > 0 {
+		pipe.Del(ctx, keys...)
+	}
 
 	_, err := pipe.Exec(ctx)
 	if err != nil {
@@ -33,6 +35,9 @@ func (c *Cache) SetUserOnline(ctx context.Context, sessionId string, u *models.M
 func (c *Cache) SetUserOffline(ctx context.Context, sessionIds ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	if len(sessionIds) == 0 {
+		return nil
+	}
 	var keys []string
 	for _, s := range sessionIds {
 		key := REDISSESSIONPREFIX + s

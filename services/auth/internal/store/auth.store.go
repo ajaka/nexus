@@ -2,9 +2,11 @@ package store
 
 import (
 	"auth/internal/cache"
+	"auth/internal/errs"
 	"auth/internal/models"
 	"auth/internal/repositories"
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,7 +43,7 @@ func (s *Store) SetUserOffline(ctx context.Context, sessionId string, userId uui
 	defer cancel()
 
 	err := s.repo.SetUserOffline(ctx, sessionId, userId)
-	if err != nil {
+	if err != nil && !errors.Is(err, errs.ERR_SESSION_NOT_FOUND) {
 		return err
 	}
 	err = s.cache.SetUserOffline(ctx, sessionId)

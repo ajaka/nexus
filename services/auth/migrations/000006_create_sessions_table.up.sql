@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     session_id TEXT UNIQUE NOT NULL,
     os TEXT,
     browser TEXT,
@@ -10,4 +10,5 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX idx_user_sessions_expires_at ON sessions(expires_at);
+-- CREATE INDEX idx_user_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX idx_sessions_user_id_expires_at ON sessions(user_id, expires_at);

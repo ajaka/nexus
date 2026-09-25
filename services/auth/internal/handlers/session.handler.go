@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"auth/internal/common"
+	"auth/internal/errs"
 	"auth/internal/models"
 	"auth/internal/store"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -26,6 +28,11 @@ func HandleRevokeSession(s *store.Store) gin.HandlerFunc {
 		}
 
 		if err := s.RevokeSession(c.Request.Context(), req.SessionID, user.UserId); err != nil {
+			if errors.Is(err, errs.ERR_SESSION_NOT_FOUND) {
+				logger.Warn("Session not found")
+				c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Session not found"})
+				return
+			}
 			logger.Error("Could not revoke user session", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
 			return

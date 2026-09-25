@@ -9,6 +9,7 @@ import (
 	"auth/internal/store"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ua-parser/uap-go/uaparser"
@@ -29,10 +30,11 @@ func HandleLogin(repo *repositories.Repository, s *store.Store, env *configs.Env
 		clientDevice := parser.Parse(ua)
 
 		NewSession := models.Sessions{
-			Brand:   clientDevice.Device.Brand,
-			Browser: clientDevice.UserAgent.Family,
-			Os:      clientDevice.Os.Family,
-			Ip:      c.ClientIP(),
+			Brand:     clientDevice.Device.Brand,
+			Browser:   clientDevice.UserAgent.Family,
+			Os:        clientDevice.Os.Family,
+			Ip:        c.ClientIP(),
+			ExpiresAt: time.Now().Add(24 * time.Hour),
 		}
 
 		user, err := repo.GetUserByEmail(c.Request.Context(), request.Email)

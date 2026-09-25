@@ -3,6 +3,7 @@ package repositories
 import (
 	"auth/internal/errs"
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -18,6 +19,9 @@ func (r *Repository) RevokeSession(ctx context.Context, sessionId, userId uuid.U
 
 	err := r.pool.QueryRow(ctx, query, sessionId, userId).Scan(&session)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errs.ERR_SESSION_NOT_FOUND
+		}
 		return "", err
 	}
 
@@ -52,7 +56,7 @@ func (r *Repository) RevokeAllSessions(ctx context.Context, sessionId string, us
 	if err != nil {
 		return nil, err
 	}
-	sessions, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[string])
+	sessions, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
 		return nil, err
 	}

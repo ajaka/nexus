@@ -248,42 +248,62 @@ func (r *Repository) SetUserOnline(ctx context.Context, session *models.Sessions
 	}
 	defer tx.Rollback(ctx)
 
-	query := `WITH
-  purged AS (
-    DELETE FROM sessions
-    WHERE user_id = $1 AND expires_at < CURRENT_TIMESTAMP
-    RETURNING id
-  ),
-  rotated AS (
-    DELETE FROM sessions
-    WHERE user_id = $1 AND os = $2 AND browser = $3
-    RETURNING session_id AS old_token
-  ),
-  remaining AS (
-    SELECT id, session_id
-    FROM sessions
-    WHERE user_id = $1
-    ORDER BY expires_at ASC
-  ),
+	_, err = tx.Exec(ctx, `
+		DELETE FROM sessions
+		WHERE user_id = $1 AND expires_at < CURRENT_TIMESTAMP`,
+		session.UserId,
+	)
+	if err != nil {
+		return nil, err
+	}
 
-  evicted AS (
-    DELETE FROM sessions
-    WHERE id IN (
-      SELECT id FROM remaining
-      WHERE (SELECT COUNT(*) FROM remaining) >= 5
-      LIMIT 1
-    )
-    RETURNING session_id AS evicted_token
-  )
+	err = tx.QueryRow(ctx, `
+		DELETE FROM sessions
+		WHERE user_id = $1 AND os = $2 AND browser = $3
+		RETURNING session_id`,
+		session.UserId, session.Os, session.Browser,
+	).Scan(&rotatedToken)
 
-	INSERT INTO user_sessions (user_id, session_id, os, browser, expires_at)
-	VALUES ($1, $4, $2, $3, $5)
-	RETURNING
-  (SELECT old_token FROM rotated LIMIT 1) AS rotated_token,
-  (SELECT evicted_token FROM evicted LIMIT 1) AS evicted_token;
-`
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, err
+	}
 
-	err = tx.QueryRow(ctx, query, session.UserId, session.Os, session.Browser, session.SessionId, session.ExpiresAt).Scan(&rotatedToken, &evictedToken)
+	var activeCount int
+	err = tx.QueryRow(ctx, `
+		SELECT COUNT(*) FROM sessions WHERE user_id = $1`,
+		session.UserId,
+	).Scan(&activeCount)
+	if err != nil {
+		return nil, err
+	}
+
+	if activeCount >= 5 {
+		err = tx.QueryRow(ctx, `
+			DELETE FROM sessions
+			WHERE id = (
+				SELECT id FROM sessions
+				WHERE user_id = $1
+				ORDER BY expires_at ASC
+				LIMIT 1
+			)
+			RETURNING session_id`,
+			session.UserId,
+		).Scan(&evictedToken)
+
+		if err != nil && err != pgx.ErrNoRows {
+			return nil, err
+		}
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO sessions (user_id, session_id, os, browser, brand, ip, expires_at)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::inet, $7)`,
+		session.UserId, session.SessionId, session.Os, session.Browser, session.Brand, session.Ip, session.ExpiresAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	var result []string
 	if rotatedToken.Valid && rotatedToken.String != "" {
 		result = append(result, rotatedToken.String)
@@ -291,10 +311,11 @@ func (r *Repository) SetUserOnline(ctx context.Context, session *models.Sessions
 	if evictedToken.Valid && evictedToken.String != "" {
 		result = append(result, evictedToken.String)
 	}
-	err = tx.Commit(ctx)
 
+	err = tx.Commit(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	return result, nil
 }
