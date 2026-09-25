@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -218,6 +219,7 @@ func (r *Repository) ActivateEmailRecovery(ctx context.Context, req *models.Forg
 
 func (r *Repository) CheckIfUserExists(ctx context.Context, userId uuid.UUID, email string) error {
 	var user models.User
+
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -234,4 +236,86 @@ func (r *Repository) CheckIfUserExists(ctx context.Context, userId uuid.UUID, em
 		return err
 	}
 	return nil
+}
+
+func (r *Repository) SetUserOnline(ctx context.Context, session *models.Sessions) ([]string, error) {
+	var rotatedToken pgtype.Text
+	var evictedToken pgtype.Text
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `
+		DELETE FROM sessions
+		WHERE user_id = $1 AND expires_at < CURRENT_TIMESTAMP`,
+		session.UserId,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.QueryRow(ctx, `
+		DELETE FROM sessions
+		WHERE user_id = $1 AND os = $2 AND browser = $3
+		RETURNING session_id`,
+		session.UserId, session.Os, session.Browser,
+	).Scan(&rotatedToken)
+
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, err
+	}
+
+	var activeCount int
+	err = tx.QueryRow(ctx, `
+		SELECT COUNT(*) FROM sessions WHERE user_id = $1`,
+		session.UserId,
+	).Scan(&activeCount)
+	if err != nil {
+		return nil, err
+	}
+
+	if activeCount >= 5 {
+		err = tx.QueryRow(ctx, `
+			DELETE FROM sessions
+			WHERE id = (
+				SELECT id FROM sessions
+				WHERE user_id = $1
+				ORDER BY expires_at ASC
+				LIMIT 1
+			)
+			RETURNING session_id`,
+			session.UserId,
+		).Scan(&evictedToken)
+
+		if err != nil && err != pgx.ErrNoRows {
+			return nil, err
+		}
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO sessions (user_id, session_id, os, browser, brand, ip, expires_at)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::inet, $7)`,
+		session.UserId, session.SessionId, session.Os, session.Browser, session.Brand, session.Ip, session.ExpiresAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []string
+	if rotatedToken.Valid && rotatedToken.String != "" {
+		result = append(result, rotatedToken.String)
+	}
+	if evictedToken.Valid && evictedToken.String != "" {
+		result = append(result, evictedToken.String)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

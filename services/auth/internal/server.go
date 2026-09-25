@@ -8,6 +8,7 @@ import (
 	"auth/internal/middlewares"
 	"auth/internal/repositories"
 	"auth/internal/routes"
+	"auth/internal/store"
 	"context"
 	"fmt"
 	"log/slog"
@@ -25,12 +26,15 @@ func Listen() error {
 	ctx := context.Background()
 	logger := slog.Default()
 
+	parser := configs.InitializeUserAgentParser()
+
 	env := configs.LoadEnv(logger)
 	pool := configs.ConnectDB(ctx, logger, env.DATABASE_URL)
 
 	repo := repositories.InitRepository(pool)
 	cache := cache.Initcache(ctx, env, logger)
 
+	store := store.InitStore(repo, cache)
 	authServer := grpc_server.BuildAuthGrpcServer(repo, cache)
 
 	// Initialize kafka outbox
@@ -58,7 +62,7 @@ func Listen() error {
 
 	g := router.Group("/auth")
 
-	routes.MountRoutes(g, repo, cache, env)
+	routes.MountRoutes(g, repo, cache, store, env, parser)
 
 	restHandler := http.Server{
 		Handler:      router,

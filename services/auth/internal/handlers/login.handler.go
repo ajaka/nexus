@@ -1,34 +1,40 @@
 package handlers
 
 import (
-	"auth/internal/cache"
 	"auth/internal/common"
 	"auth/internal/configs"
 	"auth/internal/errs"
 	"auth/internal/models"
 	"auth/internal/repositories"
+	"auth/internal/store"
 	"errors"
-	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ua-parser/uap-go/uaparser"
 )
 
-func HandleLogin(repo *repositories.Repository, ca *cache.Cache, env *configs.Env) gin.HandlerFunc {
+func HandleLogin(repo *repositories.Repository, s *store.Store, env *configs.Env, parser *uaparser.Parser) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := common.GetLogger(c)
-		value, exists := c.Get("loginRequest")
+		request, exists := common.GetFromContext[models.LoginRequest](c, "loginRequest")
 		if !exists {
 			logger.Error("Login request was not found in context")
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
 			return
 		}
 
-		request, ok := value.(models.LoginRequest)
-		if !ok {
-			logger.Error("Login request has an invalid context type", "type", fmt.Sprintf("%T", value))
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
-			return
+		ua := c.GetHeader("user-agent")
+
+		clientDevice := parser.Parse(ua)
+
+		NewSession := models.Sessions{
+			Brand:     clientDevice.Device.Brand,
+			Browser:   clientDevice.UserAgent.Family,
+			Os:        clientDevice.Os.Family,
+			Ip:        c.ClientIP(),
+			ExpiresAt: time.Now().Add(24 * time.Hour),
 		}
 
 		user, err := repo.GetUserByEmail(c.Request.Context(), request.Email)
@@ -65,10 +71,12 @@ func HandleLogin(repo *repositories.Repository, ca *cache.Cache, env *configs.En
 			UserId: user.Id,
 			Email:  user.Email,
 		}
+		NewSession.UserId = user.Id
 		if err := common.HandleLoginActivity(
 			c,
-			payload,
-			ca,
+			&payload,
+			s,
+			&NewSession,
 			env.PRODUCTION,
 		); err != nil {
 			logger.Error("Failed to create login session", "error", err)
