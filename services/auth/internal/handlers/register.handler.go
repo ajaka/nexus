@@ -7,7 +7,6 @@ import (
 	"auth/internal/models"
 	"auth/internal/repositories"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -16,16 +15,9 @@ import (
 func HandleRegister(repo *repositories.Repository, env *configs.Env) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := common.GetLogger(c)
-		value, exists := c.Get("registerRequest")
+		request, exists := common.GetFromContext[models.RegisterRequest](c, "registerRequest")
 		if !exists {
 			logger.Error("Registration request was not found in context")
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
-			return
-		}
-
-		request, ok := value.(models.RegisterRequest)
-		if !ok {
-			logger.Error("Registration request has an invalid context type", "type", fmt.Sprintf("%T", value))
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Something went wrong"})
 			return
 		}

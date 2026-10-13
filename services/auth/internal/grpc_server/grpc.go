@@ -49,18 +49,23 @@ func (a *AuthServer) VerifyUserExists(ctx context.Context, req *authv1.VerifyUse
 	}, nil
 }
 
-func (a *AuthServer) AutheticateUser(ctx context.Context, req *authv1.AuthenticateUserRequest) (*authv1.AuthenticateUserResponse, error) {
+func (a *AuthServer) AuthenticateUser(ctx context.Context, req *authv1.AuthenticateUserRequest) (*authv1.AuthenticateUserResponse, error) {
 	sessionId := req.SessionID
 	if sessionId == "" {
 		return nil, status.Error(codes.InvalidArgument, "SessionId can not be empty")
 	}
 	user, allowed := a.c.GetUser(ctx, sessionId)
-
-	return &authv1.AuthenticateUserResponse{
-		Allow: allowed,
-		User: &authv1.MinimalUserStruct{
+	var rpcUser *authv1.MinimalUserStruct
+	if !allowed {
+		rpcUser = nil
+	} else {
+		rpcUser = &authv1.MinimalUserStruct{
 			UserId: user.UserId.String(),
 			Email:  user.Email,
-		},
+		}
+	}
+	return &authv1.AuthenticateUserResponse{
+		Allow: allowed,
+		User:  rpcUser,
 	}, nil
 }

@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"time"
-	"uuid"
 
 	fts "github.com/fatih/structs"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 

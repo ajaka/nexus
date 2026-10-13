@@ -138,3 +138,19 @@ func ValidateResetPasswordRequest() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func ValidateSessionRevocation() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		logger := common.GetLogger(c)
+
+		var req models.RevokeSession
+		if err := c.ShouldBindJSON(&req); err != nil {
+			logger.Warn("Request provided an invalid body")
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid Request Body"})
+			c.Abort()
+			return
+		}
+
+		c.Set("request", &req)
+	}
+}

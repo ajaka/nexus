@@ -19,8 +19,8 @@ type LoginRequest struct {
 }
 
 type MinimalUserStruct struct {
-	UserId uuid.UUID `json:"id"`
-	Email  string    `json:"email"`
+	UserId uuid.UUID `json:"id" redis:"id"`
+	Email  string    `json:"email" redis:"email"`
 }
 
 type ForgotPasswordRequest struct {
@@ -39,4 +39,8 @@ type ResetPasswordRequest struct {
 type KafkaPayload struct {
 	Email string  `json:"email"`
 	Url   url.URL `json:"url"`
+}
+
+type RevokeSession struct {
+	SessionID uuid.UUID `json:"session_id"`
 }

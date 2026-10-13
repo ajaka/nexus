@@ -6,19 +6,24 @@ import (
 	"time"
 )
 
-func (c *Cache) SetUserOnline(ctx context.Context, sessionId string, u *models.MinimalUserStruct) (time.Time, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	key := REDISSESSIONPREFIX + sessionId
+func (c *Cache) SetUserOnline(ctx context.Context, sessionId string, u *models.MinimalUserStruct, exps ...string) (time.Time, error) {
+	var keys []string
+	for _, s := range exps {
+		key := REDISSESSIONPREFIX + s
+		keys = append(keys, key)
+	}
+	newKey := REDISSESSIONPREFIX + sessionId
 	exp := time.Hour * 24
 	r := time.Now().Add(exp)
 
 	m := structToInterface(u)
 	pipe := c.db.Pipeline()
 
-	pipe.HSet(ctx, key, m)
-	pipe.Expire(ctx, key, exp)
+	pipe.HSet(ctx, newKey, m)
+	pipe.Expire(ctx, newKey, exp)
+	if len(exps) > 0 {
+		pipe.Del(ctx, keys...)
+	}
 
 	_, err := pipe.Exec(ctx)
 	if err != nil {
@@ -27,11 +32,18 @@ func (c *Cache) SetUserOnline(ctx context.Context, sessionId string, u *models.M
 	return r, nil
 }
 
-func (c *Cache) SetUserOffline(ctx context.Context, sessionId string) error {
+func (c *Cache) SetUserOffline(ctx context.Context, sessionIds ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	key := REDISSESSIONPREFIX + sessionId
-	err := c.db.Del(ctx, key).Err()
+	if len(sessionIds) == 0 {
+		return nil
+	}
+	var keys []string
+	for _, s := range sessionIds {
+		key := REDISSESSIONPREFIX + s
+		keys = append(keys, key)
+	}
+	err := c.db.Del(ctx, keys...).Err()
 	return err
 }
 

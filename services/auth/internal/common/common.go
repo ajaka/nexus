@@ -5,6 +5,7 @@ import (
 	"auth/internal/configs"
 	"auth/internal/errs"
 	"auth/internal/models"
+	"auth/internal/store"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -45,6 +47,32 @@ func GetLogger(c *gin.Context) *slog.Logger {
 		}
 	}
 	return slog.Default()
+}
+func GetFromContext[T any](c *gin.Context, key string) (T, bool) {
+	var data T
+	val, ok := c.Get(key)
+	if !ok {
+		return data, false
+	}
+	typedCasted, ok := val.(T)
+	if !ok || iszero(val) {
+		return data, false
+	}
+	return typedCasted, true
+}
+
+func iszero(d any) bool {
+	if d == nil {
+		return true
+	}
+	rv := reflect.ValueOf(d)
+	switch rv.Kind() {
+	case reflect.String:
+		return rv.Len() == 0
+	case reflect.Ptr, reflect.Interface:
+		return rv.IsNil()
+	}
+	return reflect.DeepEqual(d, reflect.Zero(rv.Type()).Interface())
 }
 
 func HashPassword(password string) (string, error) {
@@ -132,9 +160,10 @@ func GenerateCleanUUID() string {
 	return strings.ReplaceAll(id, "-", "")
 }
 
-func HandleLoginActivity(c *gin.Context, payload models.MinimalUserStruct, ca *cache.Cache, production bool) error {
+func HandleLoginActivity(c *gin.Context, payload *models.MinimalUserStruct, s *store.Store, session *models.Sessions, production bool) error {
 	id := GenerateCleanUUID()
-	exp, err := ca.SetUserOnline(c.Request.Context(), id, &payload)
+	session.SessionId = id
+	exp, err := s.SetUserOnline(c.Request.Context(), payload, session)
 	if err != nil {
 		return err
 	}
@@ -164,13 +193,9 @@ func ValidatePasswordLength(password string) bool {
 	return true
 }
 
-func HandleLogoutActivity(c *gin.Context, cc *cache.Cache, env *configs.Env) error {
-	val, ok := c.Get("sessionId")
-	if !ok {
-		return errs.ERR_SESSION_NOT_FOUND
-	}
-	id, _ := val.(string)
-	err := cc.SetUserOffline(c.Request.Context(), id)
+func HandleLogoutActivity(c *gin.Context, s *store.Store, env *configs.Env, sessionId string, user *models.MinimalUserStruct) error {
+
+	err := s.SetUserOffline(c.Request.Context(), sessionId, user.UserId)
 	if err != nil {
 		return err
 	}
